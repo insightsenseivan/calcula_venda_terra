@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Valor de Área Rural</title>
+<style>
+  :root { color-scheme: dark; --bg1:#101827; --bg2:#243b53; --glass:rgba(255,255,255,.085); --line:rgba(255,255,255,.18); --text:#f5f7fb; --muted:#b9c7d9; --accent:#ff9f43; --green:#8cf0bc; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; padding:28px 16px; display:flex; justify-content:center; align-items:center;
+    font-family:Inter,Segoe UI,Arial,sans-serif; color:var(--text);
+    background:radial-gradient(circle at 15% 15%,#35516e 0,transparent 36%),linear-gradient(135deg,var(--bg1),var(--bg2));
+  }
+  .app { width:min(760px,100%); }
+  .panel {
+    background:var(--glass); border:1px solid var(--line); border-radius:24px; padding:clamp(20px,4vw,34px);
+    box-shadow:0 24px 70px rgba(0,0,0,.3); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  }
+  .eyebrow { font-size:.75rem; letter-spacing:.16em; text-transform:uppercase; color:#ffc98e; font-weight:800; }
+  h1 { margin:10px 0 8px; font-size:clamp(1.6rem,4vw,2.3rem); }
+  .intro { margin:0 0 26px; color:var(--muted); line-height:1.55; }
+  .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+  .field { display:flex; flex-direction:column; gap:8px; }
+  label { color:#dce6f4; font-size:.92rem; font-weight:650; }
+  input,select {
+    width:100%; padding:14px 13px; border:1px solid rgba(255,255,255,.2); border-radius:12px;
+    color:var(--text); background:rgba(10,18,31,.6); font:inherit; outline:none;
+  }
+  input:focus,select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(255,159,67,.15); }
+  select option { background:#182638; color:#fff; }
+  .hint { color:var(--muted); font-size:.8rem; line-height:1.4; }
+  .actions { display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; }
+  button { border:0; border-radius:12px; padding:14px 20px; font:inherit; font-weight:800; cursor:pointer; transition:transform .15s,filter .15s; }
+  button:hover { transform:translateY(-1px); filter:brightness(1.06); }
+  .primary { color:#211407; background:linear-gradient(135deg,#ffbf69,#ff8c32); flex:1; }
+  .secondary { color:var(--text); background:rgba(255,255,255,.1); border:1px solid var(--line); }
+  .result { display:none; margin-top:22px; padding:22px; border-radius:18px; background:rgba(7,15,26,.45); border:1px solid rgba(140,240,188,.35); }
+  .result.show { display:block; }
+  .result-label { color:var(--green); text-transform:uppercase; letter-spacing:.1em; font-size:.76rem; font-weight:800; }
+  .amount { margin:8px 0 12px; font-size:clamp(2rem,6vw,3rem); font-weight:850; letter-spacing:-.04em; overflow-wrap:anywhere; }
+  .formula { color:var(--muted); line-height:1.65; font-size:.92rem; overflow-wrap:anywhere; }
+  .foot { color:var(--muted); font-size:.78rem; margin:18px 2px 0; line-height:1.5; }
+  @media(max-width:560px) { .grid { grid-template-columns:1fr; } .actions button { width:100%; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="panel">
+    <div class="eyebrow">Calculadora rural • Glassmorphism</div>
+    <h1>Valor da área rural</h1>
+    <p class="intro">Informe o preço de um hectare, a quantidade de área e a unidade de medida. A calculadora converte a área para hectares e calcula o valor proporcional.</p>
+
+    <div class="grid">
+      <div class="field">
+        <label for="preco">Valor de 1 hectare (R$)</label>
+        <input id="preco" inputmode="decimal" placeholder="Ex.: 70.000,00" value="70000">
+        <span class="hint">Exemplo: R$ 70.000,00 por hectare.</span>
+      </div>
+      <div class="field">
+        <label for="unidade">Tipo de área informada</label>
+        <select id="unidade">
+          <option value="m2">Metros quadrados (m²)</option>
+          <option value="ha" selected>Hectares (ha)</option>
+          <option value="alq_sp">Alqueire paulista (24.200 m²)</option>
+          <option value="alq_mg">Alqueire mineiro (48.400 m²)</option>
+        </select>
+        <span class="hint">O alqueire varia conforme a região; selecione o tipo correto.</span>
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label for="area">Quantidade de área</label>
+        <input id="area" inputmode="decimal" placeholder="Ex.: 0,4936" value="0,4936">
+        <span class="hint" id="areaHint">Digite a quantidade em hectares.</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="calcular">Calcular valor da área</button>
+      <button class="secondary" id="limpar" type="button">Limpar</button>
+    </div>
+
+    <section class="result" id="resultado" aria-live="polite">
+      <div class="result-label">Valor estimado da área</div>
+      <div class="amount" id="valorFinal">R$ 0,00</div>
+      <div class="formula" id="detalhe"></div>
+    </section>
+    <p class="foot">A estimativa usa o valor por hectare informado. O resultado não é uma avaliação formal do imóvel. A equivalência em alqueires depende do padrão regional adotado.</p>
+  </section>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const money = n => n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const num = value => {
+    let s = String(value).trim().replace(/\s/g,'').replace(/R\$/gi,'');
+    if (!s) return NaN;
+    if (s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
+    return Number(s);
+  };
+  const fmt = (n,d=4) => n.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+  function updateHint() {
+    const unit = $('unidade').value;
+    const hints = {
+      m2:'Digite a quantidade em metros quadrados (m²).',
+      ha:'Digite a quantidade em hectares.',
+      alq_sp:'Digite a quantidade em alqueires paulistas (24.200 m² cada).',
+      alq_mg:'Digite a quantidade em alqueires mineiros (48.400 m² cada).'
+    };
+    $('areaHint').textContent = hints[unit];
+  }
+  function calculate() {
+    const price = num($('preco').value);
+    const area = num($('area').value);
+    const unit = $('unidade').value;
+    if (!Number.isFinite(price) || price < 0) return alert('Informe um valor válido para o hectare.');
+    if (!Number.isFinite(area) || area <= 0) return alert('Informe uma quantidade de área maior que zero.');
+    let hectares, conversion;
+    if (unit === 'm2') { hectares = area / 10000; conversion = `${fmt(area,2)} m² ÷ 10.000 = ${fmt(hectares,6)} ha`; }
+    else if (unit === 'ha') { hectares = area; conversion = `${fmt(area,6)} ha`; }
+    else if (unit === 'alq_sp') { hectares = area * 24200 / 10000; conversion = `${fmt(area,4)} alqueire(s) paulista(s) × 24.200 ÷ 10.000 = ${fmt(hectares,6)} ha`; }
+    else { hectares = area * 48400 / 10000; conversion = `${fmt(area,4)} alqueire(s) mineiro(s) × 48.400 ÷ 10.000 = ${fmt(hectares,6)} ha`; }
+    const total = hectares * price;
+    $('valorFinal').textContent = money(total);
+    $('detalhe').innerHTML = `<strong>Conversão da área:</strong> ${conversion}<br><strong>Cálculo:</strong> ${fmt(hectares,6)} ha × ${money(price)}/ha = <strong>${money(total)}</strong>`;
+    $('resultado').classList.add('show');
+  }
+  $('unidade').addEventListener('change', updateHint);
+  $('calcular').addEventListener('click', calculate);
+  $('limpar').addEventListener('click', () => {
+    $('preco').value = '';
+    $('area').value = '';
+    $('resultado').classList.remove('show');
+    $('preco').focus();
+  });
+  [$('preco'),$('area')].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); }));
+  updateHint();
+</script>
+</body>
+</html>
